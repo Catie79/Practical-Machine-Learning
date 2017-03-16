@@ -34,13 +34,15 @@ The testing data has several columns that aren't populated.  These columns won't
 
 ## Data Cleanup
 
-The columns that are null in the testing set are removed from the training set.  The training set also has incomplete observations removed.
+The columns that are null in the testing set are removed from the training set.  The training set also has incomplete observations removed.  The user name and identifier are removed as they're not predictors of the exercise.
 
 ```{r}
 #remove columns not used in testing data set
 whichcolsneedtogo<- is.na(pml.testing[1,])
 clean<-as.data.frame(pml.training[,!whichcolsneedtogo])
 pml.training <- clean
+pml.training$X <- NULL
+pml.training$user_name <- NULL
 
 #NAs
 complete <- complete.cases(pml.training)
@@ -53,11 +55,19 @@ The training data will be split to allow the model to be tested against data not
 
 ```{r}
 #Create testing, training, validation sets
+set.seed(123)
 trainIndex <- createDataPartition(trainingcomplete$classe, p = .6, 
                                   list = FALSE, 
                                   times = 1)
 pmlTrain <- trainingcomplete[ trainIndex,]
 pmlTest  <- trainingcomplete[-trainIndex,]
+set.seed(123)
+validIndex <- createDataPartition(pmlTest$classe, p = .5, 
+                                  list = FALSE, 
+                                  times = 1)
+pmlValid <- trainingcomplete[ validIndex,]
+pmlTest  <- trainingcomplete[-validIndex,]
+
 ```
 
 Random Forest
@@ -103,9 +113,18 @@ xgbtree.fit
 confusionMatrix(boost, pmlTest$classe)
 ```
 
-Both models perform very well.  With an accuracy of .999 and an accuracy of 1.0, this is about as solid a performance as can be created.  It doesn't appear that the gradient boosted tree needs any tuning as the performance was the same regardless of parameter chosen.  Both were tested in caret using cross validation with three folds and both performed above expectations.
+##Out of Sample Error
 
-Since both models are performing with nearly perfect accuracy, I'll pick the one that's less demanding on my machine.  The gradient boosted tree is much more efficient.  I can build up to 400 trees with 8GB of memory while the random forest tops out at 150 trees (random forest builds with full trees, making it more demanding of resources).
+```{r}
+oose <- predict(xgbtree.fit, pmlValid)
+sum(oose == pmlValid$classe)/nrow(pmlValid)
+
+```
+##Model selection
+
+Both models perform very well.  With an accuracy of .999 and an accuracy of .996, this is about as solid a performance as can be created.  The gradient boosted tree did benefit from the light tuning with an improvement with the lower shrinkage value.  Both were tested in caret using cross validation with three folds and both performed well with an out of sample error of 1%.
+
+Since both models are performing with nearly perfect accuracy, I'll pick the one that's less demanding on my machine.  The gradient boosted tree is much more efficient.  I can build up to 400 trees with 8GB of memory while the random forest tops out at 150 trees (random forest builds with full trees, making it more demanding of resources).  While the random forest is slightly more accurate, it's within rounding error and the efficient performance is of more value then the slight uptick in accuracy.
 
 ##Test Data
 
